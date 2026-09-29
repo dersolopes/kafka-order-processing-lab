@@ -1,4 +1,4 @@
-package com.kafkaorder.producer.dto;
+package com.kafkaorder.producer.model;
 
 public enum OrderStatus {
     PUBLISHED,

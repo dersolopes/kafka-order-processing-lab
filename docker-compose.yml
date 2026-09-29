@@ -1,0 +1,71 @@
+services:
+  # Serviço do Kafka
+  kafka:
+    # Imagem oficial do Apache Kafka
+    image: apache/kafka:latest
+    # Nome do container
+    container_name: kafka-order-processing
+    ports:
+      # Porta utilizada pelos clientes Kafka # Ex.: nossa aplicação Spring Boot
+      - "9092:9092"
+      # Porta utilizada pelo Controller do Kafka # No modo KRaft
+      - "9093:9093"
+
+    environment:
+      # Identificador único deste nó Kafka # Como teremos apenas um Kafka, usamos o ID 1
+      KAFKA_NODE_ID: 1
+
+      # Define as funções desempenhadas pelo nó
+        # broker     -> recebe e armazena mensagens
+        # controller -> gerencia o cluster Kafka
+      # Estamos usando KRaft, portanto não precisamos do ZooKeeper
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      # Endereços nos quais o Kafka irá escutar conexões
+      # PLAINTEXT  -> comunicação dos clientes com o broker / CONTROLLER -> comunicação do controller
+      # 0.0.0.0 significa que o Kafka aceita conexões em todas as interfaces de rede do container
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+
+      # Endereço que o Kafka informa aos clientes
+      # Nosso Spring Boot rodará na máquina host, portanto poderá acessar o Kafka via localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+
+      # Diz qual listener será utilizado pelo Controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Mapeia o nome do listener para o protocolo de segurança
+      # PLAINTEXT = comunicação sem TLS
+      # CONTROLLER = comunicação sem TLS
+      # Estamos usando PLAINTEXT apenas porque é um ambiente local de estudo.
+      # Em produção, a configuração de segurança seria diferente.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+
+      # Define quais controllers participam do quorum KRaft
+      # 1@localhost:9093  ->  (1   -> ID do controller | localhost -> endereço | 9093 -> porta do controller)
+      # Como temos apenas um Kafka, temos apenas um controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+
+      # Quantidade de réplicas do tópico interno
+      # que guarda os offsets dos consumer groups
+      # Como temos apenas um broker: replication factor = 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      # Quantidade de réplicas do tópico internocutilizado para transações Kafka
+      # Novamente, temos apenas um broker
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+      # Número mínimo de réplicas sincronizadas necessárias para o log de transações
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # Tempo de espera inicial antes de realizar o primeiro rebalanceamento de consumer groups
+      # Colocamos 0 para o laboratório não ficar esperando desnecessariamente durante os testes
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # Quantidade padrão de partitions criada para novos tópicos
+      # Teremos 3 partitions para podermos estudar posteriormente:
+      #   - distribuição das mensagens
+      #   - consumer groups
+      #   - concorrência
+      #   - ordenação
+      #   - Kafka lag
+      KAFKA_NUM_PARTITIONS: 3

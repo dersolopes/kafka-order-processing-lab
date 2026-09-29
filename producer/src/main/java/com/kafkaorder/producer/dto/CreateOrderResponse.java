@@ -1,6 +1,6 @@
 package com.kafkaorder.producer.dto;
 
-import jakarta.validation.constraints.NotNull;
+import com.kafkaorder.producer.model.OrderStatus;
 
 public record CreateOrderResponse(
 
