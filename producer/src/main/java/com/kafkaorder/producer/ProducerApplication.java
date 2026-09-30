@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 // 2 - Cria o contexto do Spring;
 // 3 - Encontra os componentes;
 // 4 - Configura o servidor HTTP;
-// 5  - Sobe a aplicação.
+// 5 - Sobe a aplicação.
 
 @SpringBootApplication
 public class ProducerApplication {

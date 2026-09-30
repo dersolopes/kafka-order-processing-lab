@@ -8,7 +8,7 @@ public class OrderEventConsumer {
 
     @KafkaListener(
             topics = "orders.created",
-            groupId = "order-processing-group"
+            groupId = "${spring.kafka.consumer.group-id}"
     )
     public void consume(OrderCreatedEvent event) {
 

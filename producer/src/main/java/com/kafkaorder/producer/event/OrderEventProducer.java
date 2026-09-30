@@ -1,5 +1,6 @@
 package com.kafkaorder.producer.event;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -15,15 +16,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderEventProducer {
 
-    // Nome do tópico Kafka onde os eventos serão publicados
-    // Tópicos são categorias para organizar mensagens (ex: orders.created, payments.processed)
-    private static final String TOPIC = "orders.created";
+    @Value("${app.kafka.topics.orders-created}")
+    private String topic;
 
     // KafkaTemplate gerencia a conexão com o broker e serialização das mensagens
     // <String, OrderCreatedEvent> indica: Key = String, Value = OrderCreatedEvent
     private final KafkaTemplate<String, OrderCreatedEvent> kafkaTemplate;
 
-    public OrderEventProducer(KafkaTemplate<String, OrderCreatedEvent> kafkaTemplate) {
+    public OrderEventProducer(
+            KafkaTemplate<String, OrderCreatedEvent> kafkaTemplate) {
+
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -39,10 +41,11 @@ public class OrderEventProducer {
      * @param event Evento de domínio a ser publicado
      */
     public void publish(OrderCreatedEvent event) {
-        // send(topic, key, value)
-        // - topic: "orders.created" - onde a mensagem será armazenada
-        // - key: event.orderId() - garante que eventos do mesmo pedido ficam ordenados
-        // - value: event - o conteúdo serializado da mensagem
-        kafkaTemplate.send(TOPIC, event.orderId(), event);
+
+        kafkaTemplate.send(
+                topic,
+                event.orderId(),
+                event
+        );
     }
 }

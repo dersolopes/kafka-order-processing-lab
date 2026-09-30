@@ -30,7 +30,7 @@ A aplicação é composta por um Producer e três Consumers independentes:
 
 ---
 
-## Objetivo
+# Objetivo
 
 O objetivo não é criar um sistema comercial completo.
 
@@ -126,16 +126,13 @@ gera um evento:
 
 ```json
 {
-  "eventId": "e123",
-  "eventType": "ORDER_CREATED",
-  "occurredAt": "2026-09-28T14:30:00Z",
-  "order": {
-    "orderId": "8b7f3c21",
-    "customerId": "12345",
-    "product": "Notebook",
-    "quantity": 1,
-    "amount": 4500.00
-  }
+  "eventId": "e123456",
+  "orderId": "8b7f3c21",
+  "customerId": "12345",
+  "product": "Notebook",
+  "quantity": 1,
+  "amount": 4500.00,
+  "occurredAt": "2026-09-28T14:30:00Z"
 }
 ```
 
@@ -146,6 +143,47 @@ orders.created
 ```
 
 Os três Consumer Groups recebem o evento independentemente.
+
+---
+
+# Kafka
+
+O Kafka utilizado no laboratório roda localmente através do Docker Compose.
+
+```text
+Producer
+    │
+    ▼
+orders.created
+    │
+    ├── Partition 0
+    ├── Partition 1
+    └── Partition 2
+```
+
+O topic possui inicialmente **3 partitions**.
+
+O `orderId` é utilizado como **Kafka key**:
+
+```text
+KafkaTemplate.send(
+    topic,
+    event.orderId(),
+    event
+);
+```
+
+Isso permite estudar a relação entre:
+
+```text
+Key
+ ↓
+Partition
+ ↓
+Ordering
+```
+
+A ordenação é garantida dentro de uma partition, e não entre todas as partitions do topic.
 
 ---
 
@@ -161,13 +199,193 @@ orders.created
        └── order-audit-group
 ```
 
-Essa estrutura permitirá estudar a diferença entre:
+Essa estrutura permite estudar a diferença entre:
 
 * consumidores do mesmo grupo;
 * consumidores de grupos diferentes;
 * paralelismo;
 * distribuição de partitions;
-* rebalancing.
+* rebalancing;
+* offsets;
+* consumer lag.
+
+Cada partition pode ser atribuída a apenas um consumer dentro de um determinado Consumer Group.
+
+Por exemplo:
+
+```text
+3 partitions + 3 consumers
+
+P0 → Consumer A
+P1 → Consumer B
+P2 → Consumer C
+```
+
+Com apenas dois consumers:
+
+```text
+3 partitions + 2 consumers
+
+P0 → Consumer A
+P1 → Consumer A
+P2 → Consumer B
+```
+
+Com quatro consumers:
+
+```text
+3 partitions + 4 consumers
+
+P0 → Consumer A
+P1 → Consumer B
+P2 → Consumer C
+P3 → não existe
+
+Consumer D → idle
+```
+
+---
+
+# Offsets e Consumer Lag
+
+O laboratório também utiliza os comandos nativos do Kafka para observar offsets e lag.
+
+```text
+LAG = LOG-END-OFFSET - CURRENT-OFFSET
+```
+
+Exemplo:
+
+```text
+CURRENT-OFFSET = 23
+LOG-END-OFFSET = 27
+
+LAG = 4
+```
+
+Quando um Consumer Group para de consumir, novas mensagens continuam sendo gravadas no Kafka e o lag aumenta.
+
+Quando o consumer volta a processar, ele avança o offset e o lag diminui.
+
+---
+
+# Experimento: auto.offset.reset
+
+Foi criado um Consumer Group temporário:
+
+```text
+order-processing-test-group
+```
+
+com:
+
+```properties
+spring.kafka.consumer.auto-offset-reset=earliest
+```
+
+Como o grupo não possuía offsets previamente registrados, o Kafka encontrou:
+
+```text
+Found no committed offset
+```
+
+e iniciou as partitions em:
+
+```text
+offset=0
+```
+
+Isso demonstrou na prática o comportamento de:
+
+```text
+auto.offset.reset=earliest
+```
+
+A diferença entre `earliest` e `latest` será explorada novamente em experimentos futuros.
+
+---
+
+# Serialização e desserialização
+
+O Producer publica o evento como JSON utilizando `JacksonJsonSerializer`.
+
+Os Consumers utilizam `JacksonJsonDeserializer`.
+
+O projeto evita depender diretamente da classe Java existente no Producer para representar o evento.
+
+Conceitualmente:
+
+```text
+Producer Java Object
+        │
+        ▼
+       JSON
+        │
+        ▼
+      Kafka
+        │
+        ▼
+       JSON
+        │
+        ▼
+Consumer Java Object
+```
+
+O objetivo é tratar o evento como um contrato de integração entre os serviços, e não como uma dependência direta entre classes Java de diferentes aplicações.
+
+---
+
+# Comandos Kafka úteis
+
+## Listar Consumer Groups
+
+```bash
+docker exec -it kafka-order-processing \
+  /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --list
+```
+
+## Ver offsets e lag de um Consumer Group
+
+```bash
+docker exec -it kafka-order-processing \
+  /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --describe \
+  --group order-processing-group
+```
+
+## Descrever um Topic
+
+```bash
+docker exec -it kafka-order-processing \
+  /opt/kafka/bin/kafka-topics.sh \
+  --describe \
+  --topic orders.created \
+  --bootstrap-server localhost:9092
+```
+
+## Listar Topics
+
+```bash
+docker exec -it kafka-order-processing \
+  /opt/kafka/bin/kafka-topics.sh \
+  --list \
+  --bootstrap-server localhost:9092
+```
+
+## Consumir mensagens diretamente pelo Kafka
+
+```bash
+docker exec -it kafka-order-processing \
+  /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic orders.created \
+  --from-beginning \
+  --property print.key=true \
+  --property print.partition=true
+```
 
 ---
 
@@ -217,37 +435,37 @@ Essa estrutura permitirá estudar a diferença entre:
 
 ## Phase 1 — Producer
 
-* [ ] Criar projeto Spring Boot
-* [ ] Configurar Maven
-* [ ] Criar endpoint `POST /orders`
-* [ ] Criar DTOs
-* [ ] Gerar Order ID
-* [ ] Criar evento
+* [x] Criar projeto Spring Boot
+* [x] Configurar Maven
+* [x] Criar endpoint `POST /orders`
+* [x] Criar DTOs
+* [x] Gerar Order ID
+* [x] Criar evento
 
 ## Phase 2 — Kafka Producer
 
-* [ ] Configurar Kafka
-* [ ] Criar topic
-* [ ] Configurar KafkaTemplate
-* [ ] Publicar evento
-* [ ] Configurar JSON serialization
-* [ ] Utilizar orderId como key
+* [x] Configurar Kafka
+* [x] Criar topic
+* [x] Configurar KafkaTemplate
+* [x] Publicar evento
+* [x] Configurar JSON serialization
+* [x] Utilizar orderId como key
 
 ## Phase 3 — Consumers
 
-* [ ] Processing Consumer
-* [ ] Notification Consumer
-* [ ] Audit Consumer
-* [ ] Consumer Groups
-* [ ] JSON deserialization
+* [x] Processing Consumer
+* [x] Notification Consumer
+* [x] Audit Consumer
+* [x] Consumer Groups
+* [x] JSON deserialization
 
 ## Phase 4 — Kafka Advanced
 
-* [ ] Partitions
-* [ ] Keys
-* [ ] Offsets
-* [ ] Consumer Groups
-* [ ] Rebalancing
+* [x] Partitions
+* [x] Keys
+* [x] Offsets
+* [x] Consumer Groups
+* [x] Rebalancing
 * [ ] Retry
 * [ ] Dead Letter Topic
 
@@ -266,7 +484,7 @@ Essa estrutura permitirá estudar a diferença entre:
 * [ ] Dockerfile Processing
 * [ ] Dockerfile Notification
 * [ ] Dockerfile Audit
-* [ ] Docker Compose
+* [x] Docker Compose
 
 ## Phase 7 — Kubernetes
 
@@ -297,7 +515,7 @@ Essa estrutura permitirá estudar a diferença entre:
 
 ---
 
-# Estrutura inicial
+# Estrutura
 
 ```text
 kafka-order-processing-lab/
@@ -307,7 +525,6 @@ kafka-order-processing-lab/
 ├── consumer-processing/
 │
 ├── consumer-notification/
-│
 ├── consumer-audit/
 │
 ├── docker/
@@ -315,7 +532,6 @@ kafka-order-processing-lab/
 ├── k8s/
 │
 ├── docker-compose.yml
-│
 ├── README.md
 └── .gitignore
 ```
@@ -338,6 +554,15 @@ Kafka
 
 Consumer Groups
 → processamento paralelo
+
+Keys
+→ direcionamento para partitions
+
+Offsets
+→ posição de consumo
+
+Consumer Lag
+→ medir mensagens pendentes
 
 Retry/DLT
 → resiliência

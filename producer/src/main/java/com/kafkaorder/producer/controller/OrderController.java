@@ -17,8 +17,6 @@ public class OrderController {
 
     private final OrderService orderService;
 
-
-    // @RequestMapping("/orders") e @PostMapping resultam em POST /orders
     @PostMapping
     public CreateOrderResponse createOrder(
             @Valid @RequestBody CreateOrderRequest order) {
